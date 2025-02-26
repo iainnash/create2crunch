@@ -15,18 +15,10 @@ fn main() {
         }
     };
 
-    if config.gpu_device == 0 && config.prefix.is_some() {
-        println!("Using CPU for prefix search (GPU prefix search not working)...");
-        let mut cpu_config = config.clone();
-        cpu_config.gpu_device = 255; // Set to CPU mode
-        if let Err(e) = cpu(cpu_config) {
-            eprintln!("Application error: {}", e);
-            process::exit(1);
-        }
-    } else if config.gpu_device == 0 {
+    if config.gpu_device == 0 {
         println!("Using GPU device 0...");
         if let Err(e) = gpu(config) {
-            eprintln!("Application error: {}", e);
+            eprintln!("GPU search failed: {}", e);
             process::exit(1);
         }
     } else if config.gpu_device == 255 {

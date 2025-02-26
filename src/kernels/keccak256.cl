@@ -31,6 +31,20 @@
 // Add this function declaration at the top of the file, before it's used
 char get_hex_char(uchar byte, bool high_nibble);
 
+// Add this at the top of the file to make it more compatible with Metal
+#ifdef __APPLE__
+#pragma OPENCL EXTENSION cl_khr_fp64 : enable
+#endif
+
+// Add this at the top of the file after the existing includes
+#define PREFIX_0 '1'
+#define PREFIX_1 '1'
+#define PREFIX_2 '1'
+#define HAS_PREFIX 1
+
+// Add this at the top of the file
+#define DEBUG_MODE 1
+
 /******** Keccak-f[1600] (for finding efficient Ethereum addresses) ********/
 
 #define OPENCL_PLATFORM_UNKNOWN 0
@@ -218,23 +232,75 @@ static inline void keccakf(ulong *a)
 #else
 static inline bool hasLeading(uchar const *d)
 {
-// #pragma unroll
-  return (d[0] == 0x77 &&
-  d[1] == 0x77 && 
-  d[2] == 0x77);
-  // for (uint i = 0; i < LEADING_ZEROES; ++i) {
-  //   if (d[i] != 0xaa) return false;
-  // }
-  // return true;
+  // For an address to start with "11" in hex:
+  // We need to check if the first byte is 0x11 and the high nibble of the second byte is 0x1
+  
+  // Check if the first byte is 0x11
+  if (d[0] != 0x11)
+    return false;
+    
+  // Check if the high nibble of the second byte is 0x1
+  if ((d[1] & 0xF0) != 0x10)
+    return false;
+    
+  return true;
 }
 #endif
+
+// Helper function to convert a nibble to its hex character
+static inline char nibbleToHexChar(uchar nibble) {
+  return nibble < 10 ? '0' + nibble : 'a' + (nibble - 10);
+}
+
+// Function to check if the address starts with "1111111"
+static inline bool startsWithSevenOnes(uchar const *d) {
+  // For an address to start with "1111111" in hex:
+  // The first byte should have high nibble 1 and low nibble 1
+  // The second byte should have high nibble 1 and low nibble 1
+  // The third byte should have high nibble 1 and low nibble 1
+  // The fourth byte should have high nibble 1 (first nibble of the fourth byte)
+  
+  // Extract the first byte of the address
+  uchar firstByte = d[0];
+  
+  // Extract the high and low nibbles of the first byte
+  uchar firstHighNibble = (firstByte >> 4) & 0xF;
+  uchar firstLowNibble = firstByte & 0xF;
+  
+  // Extract the second byte of the address
+  uchar secondByte = d[1];
+  
+  // Extract the high and low nibbles of the second byte
+  uchar secondHighNibble = (secondByte >> 4) & 0xF;
+  uchar secondLowNibble = secondByte & 0xF;
+  
+  // Extract the third byte of the address
+  uchar thirdByte = d[2];
+  
+  // Extract the high and low nibbles of the third byte
+  uchar thirdHighNibble = (thirdByte >> 4) & 0xF;
+  uchar thirdLowNibble = thirdByte & 0xF;
+  
+  // Extract the fourth byte of the address
+  uchar fourthByte = d[3];
+  
+  // Extract the high nibble of the fourth byte
+  uchar fourthHighNibble = (fourthByte >> 4) & 0xF;
+  
+  // Check if the first seven hex characters are '1'
+  return (firstHighNibble == 1 && firstLowNibble == 1 && 
+          secondHighNibble == 1 && secondLowNibble == 1 &&
+          thirdHighNibble == 1 && thirdLowNibble == 1 &&
+          fourthHighNibble == 1);
+}
 
 __kernel void hashMessage(
   __constant uchar const *d_message,
   __constant uint const *d_nonce,
-  __global volatile ulong *restrict solutions
+  __global volatile ulong *restrict solutions,
+  __global volatile uint *restrict has_solution,
+  __global volatile uchar *restrict digest_output
 ) {
-
   ulong spongeBuffer[25];
 
 #define sponge ((uchar *) spongeBuffer)
@@ -242,136 +308,70 @@ __kernel void hashMessage(
 
   nonce_t nonce;
 
-  // write the control character
-  sponge[0] = 0xffu;
+  // Initialize sponge with zeros
+  for (int i = 0; i < 200; i++) {
+    sponge[i] = 0;
+  }
 
-  sponge[1] = S_1;
-  sponge[2] = S_2;
-  sponge[3] = S_3;
-  sponge[4] = S_4;
-  sponge[5] = S_5;
-  sponge[6] = S_6;
-  sponge[7] = S_7;
-  sponge[8] = S_8;
-  sponge[9] = S_9;
-  sponge[10] = S_10;
-  sponge[11] = S_11;
-  sponge[12] = S_12;
-  sponge[13] = S_13;
-  sponge[14] = S_14;
-  sponge[15] = S_15;
-  sponge[16] = S_16;
-  sponge[17] = S_17;
-  sponge[18] = S_18;
-  sponge[19] = S_19;
-  sponge[20] = S_20;
-  sponge[21] = S_21;
-  sponge[22] = S_22;
-  sponge[23] = S_23;
-  sponge[24] = S_24;
-  sponge[25] = S_25;
-  sponge[26] = S_26;
-  sponge[27] = S_27;
-  sponge[28] = S_28;
-  sponge[29] = S_29;
-  sponge[30] = S_30;
-  sponge[31] = S_31;
-  sponge[32] = S_32;
-  sponge[33] = S_33;
-  sponge[34] = S_34;
-  sponge[35] = S_35;
-  sponge[36] = S_36;
-  sponge[37] = S_37;
-  sponge[38] = S_38;
-  sponge[39] = S_39;
-  sponge[40] = S_40;
+  // Start with 0xff prefix for CREATE2
+  sponge[0] = 0xff;
 
-  sponge[41] = d_message[0];
-  sponge[42] = d_message[1];
-  sponge[43] = d_message[2];
-  sponge[44] = d_message[3];
+  // Copy deployer address (factory address)
+  for (int i = 0; i < 20; i++) {
+    sponge[i + 1] = d_message[i];
+  }
 
-  // populate the nonce
+  // populate the nonce for the salt
   nonce.uint32_t[0] = get_global_id(0);
   nonce.uint32_t[1] = d_nonce[0];
 
-  // populate the body of the message with the nonce
-  sponge[45] = nonce.uint8_t[0];
-  sponge[46] = nonce.uint8_t[1];
-  sponge[47] = nonce.uint8_t[2];
-  sponge[48] = nonce.uint8_t[3];
-  sponge[49] = nonce.uint8_t[4];
-  sponge[50] = nonce.uint8_t[5];
-  sponge[51] = nonce.uint8_t[6];
-  sponge[52] = nonce.uint8_t[7];
+  // Copy the salt (32 bytes, with the nonce at the end)
+  for (int i = 0; i < 24; i++) {
+    sponge[i + 21] = 0; // First 24 bytes of salt are zeros
+  }
+  
+  // Last 8 bytes of salt are the nonce
+  sponge[21 + 24] = nonce.uint8_t[0];
+  sponge[21 + 25] = nonce.uint8_t[1];
+  sponge[21 + 26] = nonce.uint8_t[2];
+  sponge[21 + 27] = nonce.uint8_t[3];
+  sponge[21 + 28] = nonce.uint8_t[4];
+  sponge[21 + 29] = nonce.uint8_t[5];
+  sponge[21 + 30] = nonce.uint8_t[6];
+  sponge[21 + 31] = nonce.uint8_t[7];
 
-  sponge[53] = S_53;
-  sponge[54] = S_54;
-  sponge[55] = S_55;
-  sponge[56] = S_56;
-  sponge[57] = S_57;
-  sponge[58] = S_58;
-  sponge[59] = S_59;
-  sponge[60] = S_60;
-  sponge[61] = S_61;
-  sponge[62] = S_62;
-  sponge[63] = S_63;
-  sponge[64] = S_64;
-  sponge[65] = S_65;
-  sponge[66] = S_66;
-  sponge[67] = S_67;
-  sponge[68] = S_68;
-  sponge[69] = S_69;
-  sponge[70] = S_70;
-  sponge[71] = S_71;
-  sponge[72] = S_72;
-  sponge[73] = S_73;
-  sponge[74] = S_74;
-  sponge[75] = S_75;
-  sponge[76] = S_76;
-  sponge[77] = S_77;
-  sponge[78] = S_78;
-  sponge[79] = S_79;
-  sponge[80] = S_80;
-  sponge[81] = S_81;
-  sponge[82] = S_82;
-  sponge[83] = S_83;
-  sponge[84] = S_84;
+  // Copy the init code hash (32 bytes)
+  for (int i = 0; i < 32; i++) {
+    sponge[i + 53] = d_message[i + 20];
+  }
 
-  // begin padding based on message length
-  sponge[85] = 0x01u;
+  // begin padding based on message length (0xff + 20 bytes + 32 bytes + 32 bytes = 85 bytes)
+  sponge[85] = 0x01;
 
   // fill padding
-#pragma unroll
-  for (int i = 86; i < 135; ++i)
+  for (int i = 86; i < 135; i++) {
     sponge[i] = 0;
+  }
 
   // end padding
-  sponge[135] = 0x80u;
-
-  // fill remaining sponge state with zeroes
-#pragma unroll
-  for (int i = 136; i < 200; ++i)
-    sponge[i] = 0;
+  sponge[135] = 0x80;
 
   // Apply keccakf
   keccakf(spongeBuffer);
 
-  // determine if the address meets the constraints
-  if (
-    hasLeading(digest) 
-  ) {
-    // To be honest, if we are using OpenCL, 
-    // we just need to write one solution for all practical purposes,
-    // since the chance of multiple solutions appearing
-    // in a single workset is extremely low.
+  // Check if the address starts with "1111111"
+  if (startsWithSevenOnes(digest)) {
+    printf("Found solution! Digest: %02x %02x %02x %02x\n", digest[0], digest[1], digest[2], digest[3]);
+    
+    // Found a solution
     solutions[0] = nonce.uint64_t;
+    has_solution[0] = 1;
+    
+    // Copy the digest to the output buffer
+    for (int i = 0; i < 200; i++) {
+      digest_output[i] = sponge[i];
+    }
   }
-
-#ifdef HAS_PREFIX
-    // Match ANY address - this should always find something
-    solutions[0] = nonce.uint64_t;
-#endif
 }
 
 // Helper function implementation at the end of the file
