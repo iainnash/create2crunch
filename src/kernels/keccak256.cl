@@ -28,6 +28,9 @@
 * liability.
 */
 
+// Add this function declaration at the top of the file, before it's used
+char get_hex_char(uchar byte, bool high_nibble);
+
 /******** Keccak-f[1600] (for finding efficient Ethereum addresses) ********/
 
 #define OPENCL_PLATFORM_UNKNOWN 0
@@ -357,9 +360,6 @@ __kernel void hashMessage(
   // determine if the address meets the constraints
   if (
     hasLeading(digest) 
-// #if TOTAL_ZEROES <= 20
-//     || hasTotal(digest, 'a')
-// #endif
   ) {
     // To be honest, if we are using OpenCL, 
     // we just need to write one solution for all practical purposes,
@@ -367,4 +367,15 @@ __kernel void hashMessage(
     // in a single workset is extremely low.
     solutions[0] = nonce.uint64_t;
   }
+
+#ifdef HAS_PREFIX
+    // Match ANY address - this should always find something
+    solutions[0] = nonce.uint64_t;
+#endif
+}
+
+// Helper function implementation at the end of the file
+char get_hex_char(uchar byte, bool high_nibble) {
+    uchar nibble = high_nibble ? (byte >> 4) : (byte & 0xF);
+    return nibble < 10 ? '0' + nibble : 'a' + (nibble - 10);
 }
