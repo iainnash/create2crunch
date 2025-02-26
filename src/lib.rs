@@ -58,10 +58,11 @@ pub struct Config {
     pub factory_address: [u8; 20],
     pub calling_address: [u8; 20],
     pub init_code_hash: [u8; 32],
-    pub gpu_device: u8,
+    pub gpu_device: u32,
     pub leading_zeroes_threshold: u8,
     pub total_zeroes_threshold: u8,
     pub prefix: Option<String>,
+    pub leading_ones: u32,
 }
 
 /// Validate the provided arguments and construct the Config struct.
@@ -192,8 +193,8 @@ impl Config {
         let init_code_hash = to_fixed_32(init_code_hash_vec);
 
         // convert gpu arguments to u8 values
-        let gpu_device: u8 = match gpu_device_string
-                                               .parse::<u8>() {
+        let gpu_device: u32 = match gpu_device_string
+                                               .parse::<u32>() {
             Ok(t) => t,
             Err(_) => {
                 return Err(
@@ -224,6 +225,7 @@ impl Config {
             leading_zeroes_threshold,
             total_zeroes_threshold,
             prefix,
+            leading_ones: 0,
           }
         )
     }

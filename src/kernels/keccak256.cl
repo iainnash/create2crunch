@@ -252,46 +252,36 @@ static inline char nibbleToHexChar(uchar nibble) {
   return nibble < 10 ? '0' + nibble : 'a' + (nibble - 10);
 }
 
-// Function to check if the address starts with "1111111"
-static inline bool startsWithSevenOnes(uchar const *d) {
-  // For an address to start with "1111111" in hex:
-  // The first byte should have high nibble 1 and low nibble 1
-  // The second byte should have high nibble 1 and low nibble 1
-  // The third byte should have high nibble 1 and low nibble 1
-  // The fourth byte should have high nibble 1 (first nibble of the fourth byte)
+// Function to check if the address starts with a specific number of '1's
+static inline bool startsWithOnes(uchar const *d, int numOnes) {
+  // Each byte contains 2 hex characters
+  // So we need to check numOnes/2 bytes fully, plus potentially one nibble
   
-  // Extract the first byte of the address
-  uchar firstByte = d[0];
+  int fullBytes = numOnes / 2;  // Number of bytes to check fully
+  bool checkExtraNibble = (numOnes % 2 != 0);  // Whether to check an extra nibble
   
-  // Extract the high and low nibbles of the first byte
-  uchar firstHighNibble = (firstByte >> 4) & 0xF;
-  uchar firstLowNibble = firstByte & 0xF;
+  // Check full bytes (both high and low nibbles must be 1)
+  for (int i = 0; i < fullBytes; i++) {
+    uchar byte = d[i];
+    uchar highNibble = (byte >> 4) & 0xF;
+    uchar lowNibble = byte & 0xF;
+    
+    if (highNibble != 1 || lowNibble != 1) {
+      return false;
+    }
+  }
   
-  // Extract the second byte of the address
-  uchar secondByte = d[1];
+  // Check extra nibble if needed
+  if (checkExtraNibble) {
+    uchar byte = d[fullBytes];
+    uchar highNibble = (byte >> 4) & 0xF;
+    
+    if (highNibble != 1) {
+      return false;
+    }
+  }
   
-  // Extract the high and low nibbles of the second byte
-  uchar secondHighNibble = (secondByte >> 4) & 0xF;
-  uchar secondLowNibble = secondByte & 0xF;
-  
-  // Extract the third byte of the address
-  uchar thirdByte = d[2];
-  
-  // Extract the high and low nibbles of the third byte
-  uchar thirdHighNibble = (thirdByte >> 4) & 0xF;
-  uchar thirdLowNibble = thirdByte & 0xF;
-  
-  // Extract the fourth byte of the address
-  uchar fourthByte = d[3];
-  
-  // Extract the high nibble of the fourth byte
-  uchar fourthHighNibble = (fourthByte >> 4) & 0xF;
-  
-  // Check if the first seven hex characters are '1'
-  return (firstHighNibble == 1 && firstLowNibble == 1 && 
-          secondHighNibble == 1 && secondLowNibble == 1 &&
-          thirdHighNibble == 1 && thirdLowNibble == 1 &&
-          fourthHighNibble == 1);
+  return true;
 }
 
 __kernel void hashMessage(
@@ -345,6 +335,9 @@ __kernel void hashMessage(
     sponge[i + 53] = d_message[i + 20];
   }
 
+  // Get the number of leading ones to check for
+  uchar numOnes = d_message[52];
+
   // begin padding based on message length (0xff + 20 bytes + 32 bytes + 32 bytes = 85 bytes)
   sponge[85] = 0x01;
 
@@ -359,10 +352,8 @@ __kernel void hashMessage(
   // Apply keccakf
   keccakf(spongeBuffer);
 
-  // Check if the address starts with "1111111"
-  if (startsWithSevenOnes(digest)) {
-    printf("Found solution! Digest: %02x %02x %02x %02x\n", digest[0], digest[1], digest[2], digest[3]);
-    
+  // Check if the address starts with the specified number of '1's
+  if (startsWithOnes(digest, numOnes)) {
     // Found a solution
     solutions[0] = nonce.uint64_t;
     has_solution[0] = 1;

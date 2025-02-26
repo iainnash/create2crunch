@@ -25,12 +25,14 @@ pub fn gpu(config: Config) -> Result<(), Box<dyn Error>> {
     // Generate a salt with all zeros
     let salt: [u8; 6] = [0, 0, 0, 0, 0, 0];
 
-    // Set up the message for the kernel (factory address + init code hash)
-    let mut message: Vec<u8> = Vec::with_capacity(52);
+    // Set up the message for the kernel (factory address + init code hash + leading_ones)
+    let mut message: Vec<u8> = Vec::with_capacity(53);
     // First 20 bytes: factory address
     message.extend_from_slice(&factory);
     // Next 32 bytes: init code hash
     message.extend_from_slice(&init_hash);
+    // Last byte: number of leading ones
+    message.push(config.leading_ones as u8);
 
     // Set up the OpenCL context
     let platform = Platform::default();
@@ -57,6 +59,9 @@ pub fn gpu(config: Config) -> Result<(), Box<dyn Error>> {
 
     // Main loop
     loop {
+        // At the beginning of the loop, define the prefix
+        let prefix = "1".repeat(config.leading_ones as usize);
+
         // Build the kernel and define the type of each buffer
         let kern = ocl_pq.kernel_builder("hashMessage")
             .arg_named("message", None::<&Buffer<u8>>)
@@ -146,13 +151,14 @@ pub fn gpu(config: Config) -> Result<(), Box<dyn Error>> {
             // Print detailed information about the solution
             println!("Found potential solution!");
             println!("Address from kernel digest: 0x{}", hex_address);
-            println!("First byte (hex): {:02x}", address_bytes[0]);
-            println!("First two hex chars: {}", hex_address.chars().take(2).collect::<String>());
             
-            // Check if the address starts with "1111111"
-            if hex_address.starts_with("1111111") {
+            // Check if the address starts with the specified number of '1's
+            if hex_address.starts_with(&prefix) {
+                // Calculate the time it took to find the solution
+                let solution_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64() - start_time;
+                
                 // Found a valid solution
-                println!("\nFound valid solution with prefix '1111111'!");
+                println!("\nFound valid solution with prefix '{}' in {:.2} seconds!", prefix, solution_time);
                 
                 // Convert address to checksummed format
                 let checksummed_address = to_checksum_address(&hex_address);
@@ -216,16 +222,17 @@ pub fn gpu(config: Config) -> Result<(), Box<dyn Error>> {
                 80
             };
             
-            // Clear the line
-            term.clear_line()?;
+            // Clear the terminal output
+            print!("\x1B[2J\x1B[1;1H"); // ANSI escape code to clear screen and move cursor to top-left
             
             // Print the status
             println!(
-                "\r----- New Update -----\ntotal runtime: {:.2} seconds                     work size per cycle: {}\nrate: {:.2} million attempts per second                  total found this run: 0\ncurrent search space: {:x}xxxxxxxx          searching for prefix: 1111111",
+                "----- New Update -----\ntotal runtime: {:.2} seconds                     work size per cycle: {}\nrate: {:.2} million attempts per second                  total found this run: 0\ncurrent search space: {:x}xxxxxxxx          searching for prefix: {}",
                 elapsed,
                 WORK_SIZE.separated_string(),
                 rate,
-                nonce[0]
+                nonce[0],
+                "1".repeat(config.leading_ones as usize)
             );
             
             // Check if we've been running for more than 30 minutes without finding a solution
