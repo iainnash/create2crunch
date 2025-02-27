@@ -235,11 +235,7 @@ pub fn gpu(config: Config) -> Result<(), Box<dyn Error>> {
                 "1".repeat(config.leading_ones as usize)
             );
             
-            // Check if we've been running for more than 30 minutes without finding a solution
-            if elapsed > 1800.0 {
-                println!("No solution found after 30 minutes. Exiting...");
-                std::process::exit(1);
-            }
+            
         }
     }
 }
