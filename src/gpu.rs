@@ -227,10 +227,11 @@ pub fn gpu(config: Config) -> Result<(), Box<dyn Error>> {
             
             // Print the status
             println!(
-                "----- New Update -----\ntotal runtime: {:.2} seconds                     work size per cycle: {}\nrate: {:.2} million attempts per second                  total found this run: 0\ncurrent search space: {:x}xxxxxxxx          searching for prefix: {}",
+                "----- New Update -----\ntotal runtime: {:.2} seconds                     work size per cycle: {}\nrate: {:.2} million attempts per second                  total attempts: {}\ncurrent search space: {:x}xxxxxxxx          searching for prefix: {}",
                 elapsed,
                 WORK_SIZE.separated_string(),
                 rate,
+                cumulative_nonce.separated_string(),
                 nonce[0],
                 "1".repeat(config.leading_ones as usize)
             );
